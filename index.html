@@ -123,26 +123,29 @@ document.querySelectorAll('[data-game-launch]').forEach(button=>{
    fail('启动失败：请从 https://starseacolin.github.io 上的官方作品网页打开。');return;
   }
   const v150=destination.pathname==='/FKZL-CS/'||destination.pathname==='/FKZL-CS/index.html';
-  if(v150){
+  const formula=destination.pathname==='/Formula-Game/'||destination.pathname==='/Formula-Game/index.html';
+  if(v150||formula){
    if(window.location.pathname!=='/Oll/'&&window.location.pathname!=='/Oll/index.html'){
-    fail('启动失败：只能从 /Oll/ 官方作品网页启动 v150。');return;
+    fail('启动失败：只能从 /Oll/ 官方作品网页启动此游戏。');return;
    }
    try{
     if(!window.crypto||!window.crypto.getRandomValues)throw new Error('secure random unavailable');
     const random=new Uint8Array(32);
     window.crypto.getRandomValues(random);
     const token=Array.from(random,b=>b.toString(16).padStart(2,'0')).join('');
-    window.sessionStorage.setItem('fkzl_v150_pending_v2',JSON.stringify({
-     v:2,token,created:Date.now(),target:'/FKZL-CS/'
+    const key=formula?'formula_lab_pending_v2':'fkzl_v150_pending_v2';
+    const target=formula?'/Formula-Game/':'/FKZL-CS/';
+    window.sessionStorage.setItem(key,JSON.stringify({
+     v:2,token,created:Date.now(),target
     }));
-    if(!window.sessionStorage.getItem('fkzl_v150_pending_v2'))throw new Error('storage unavailable');
-    // 票据只用于首次跳转；游戏校验通过后立即从地址栏移除。
-    destination.hash='fkzl_launch='+token;
+    if(!window.sessionStorage.getItem(key))throw new Error('storage unavailable');
+    // 首次进入验证后销毁凭证；两个游戏使用完全独立的授权状态。
+    destination.hash=(formula?'formula_launch=':'fkzl_launch=')+token;
    }catch{
     fail('启动失败：无法创建或保存一次性授权，请检查浏览器存储及安全连接。');return;
    }
   }else{
-   // 非 v150 的现有作品不改变原本的入口行为。
+   // 除 v150 与公式增量以外的作品保持原有入口行为。
    try{
     window.sessionStorage.setItem('oll_game_launch_v1','authorized');
     if(window.sessionStorage.getItem('oll_game_launch_v1')!=='authorized')throw new Error('Authorization was not stored');
