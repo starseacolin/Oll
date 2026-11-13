@@ -111,7 +111,8 @@ function siteRouter(project,initialize,initialKey=''){
  addEventListener('hashchange',()=>{if(location.hash!=='#main')render();});render();
 }
 function initialize(){
-// 仅此游戏使用同标签页会话授权；不触碰任何存档或其他存储项。
+// v150 测试版采用单独的一次性启动凭证；其他作品继续使用原有逻辑。
+// 注意：GitHub Pages 是静态托管，此机制阻止直接访问，但不能保证防止源码修改。
 document.querySelectorAll('[data-game-launch]').forEach(button=>{
  button.addEventListener('click',()=>{
   const status=document.getElementById(button.getAttribute('aria-describedby'));
@@ -119,13 +120,35 @@ document.querySelectorAll('[data-game-launch]').forEach(button=>{
   status.hidden=true;status.textContent='';button.disabled=true;
   const destination=new URL(button.dataset.gameLaunch);
   if(window.location.origin!==destination.origin){
-   fail('启动失败：请在 https://starseacolin.github.io 上的官方主页打开此入口。本地预览或其他域名无法传递授权。');return;
+   fail('启动失败：请从 https://starseacolin.github.io 上的官方作品网页打开。');return;
   }
-  try{
-   window.sessionStorage.setItem('oll_game_launch_v1','authorized');
-   if(window.sessionStorage.getItem('oll_game_launch_v1')!=='authorized')throw new Error('Authorization was not stored');
-  }catch{
-   fail('启动失败：浏览器无法保存会话授权，请允许此网站使用 sessionStorage 后重试。');return;
+  const v150=destination.pathname==='/FKZL-CS/'||destination.pathname==='/FKZL-CS/index.html';
+  if(v150){
+   if(window.location.pathname!=='/Oll/'&&window.location.pathname!=='/Oll/index.html'){
+    fail('启动失败：只能从 /Oll/ 官方作品网页启动 v150。');return;
+   }
+   try{
+    if(!window.crypto||!window.crypto.getRandomValues)throw new Error('secure random unavailable');
+    const random=new Uint8Array(32);
+    window.crypto.getRandomValues(random);
+    const token=Array.from(random,b=>b.toString(16).padStart(2,'0')).join('');
+    window.sessionStorage.setItem('fkzl_v150_pending_v2',JSON.stringify({
+     v:2,token,created:Date.now(),target:'/FKZL-CS/'
+    }));
+    if(!window.sessionStorage.getItem('fkzl_v150_pending_v2'))throw new Error('storage unavailable');
+    // 票据只用于首次跳转；游戏校验通过后立即从地址栏移除。
+    destination.hash='fkzl_launch='+token;
+   }catch{
+    fail('启动失败：无法创建或保存一次性授权，请检查浏览器存储及安全连接。');return;
+   }
+  }else{
+   // 非 v150 的现有作品不改变原本的入口行为。
+   try{
+    window.sessionStorage.setItem('oll_game_launch_v1','authorized');
+    if(window.sessionStorage.getItem('oll_game_launch_v1')!=='authorized')throw new Error('Authorization was not stored');
+   }catch{
+    fail('启动失败：浏览器无法保存会话授权，请允许此网站使用 sessionStorage 后重试。');return;
+   }
   }
   try{window.location.assign(destination.href);}
   catch{fail('启动失败：浏览器未能打开游戏，请重试。');}
