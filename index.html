@@ -111,21 +111,53 @@ function siteRouter(project,initialize,initialKey=''){
  addEventListener('hashchange',()=>{if(location.hash!=='#main')render();});render();
 }
 function initialize(){
-// 仅此游戏使用同标签页会话授权；不触碰任何存档或其他存储项。
+// 官方入口：正式版、测试版和公式增量各自使用独立的一次性凭证。
+// 其他项目沿用原有的启动方式；不碰游戏存档数据。
 document.querySelectorAll('[data-game-launch]').forEach(button=>{
  button.addEventListener('click',()=>{
   const status=document.getElementById(button.getAttribute('aria-describedby'));
   const fail=message=>{status.textContent=message;status.hidden=false;button.disabled=false;};
   status.hidden=true;status.textContent='';button.disabled=true;
-  const destination=new URL(button.dataset.gameLaunch);
-  if(window.location.origin!==destination.origin){
-   fail('启动失败：请在 https://starseacolin.github.io 上的官方主页打开此入口。本地预览或其他域名无法传递授权。');return;
+  let destination;
+  try{destination=new URL(button.dataset.gameLaunch,window.location.href);}
+  catch{fail('启动失败：游戏地址无效。');return;}
+  const officialOrigin='https://starseacolin.github.io';
+  if(window.location.origin!==officialOrigin || destination.origin!==officialOrigin){
+   fail('启动失败：请在官方作品网站打开游戏。本地预览或其他域名无法传递授权。');return;
   }
-  try{
-   window.sessionStorage.setItem('oll_game_launch_v1','authorized');
-   if(window.sessionStorage.getItem('oll_game_launch_v1')!=='authorized')throw new Error('Authorization was not stored');
-  }catch{
-   fail('启动失败：浏览器无法保存会话授权，请允许此网站使用 sessionStorage 后重试。');return;
+  const targets={
+   '/FKZL/':{key:'fkzl_main_pending_v2',prefix:'fkzl_launch='},
+   '/FKZL-CS/':{key:'fkzl_v158_pending_v2',prefix:'fkzl_launch='},
+   '/Formula-Game/':{key:'formula_lab_pending_v2',prefix:'formula_launch='}
+  };
+  const normalized=destination.pathname.endsWith('/index.html')
+   ? destination.pathname.slice(0,-'index.html'.length) : destination.pathname;
+  const target=targets[normalized];
+  if(target){
+   if(window.location.pathname!=='/Oll/' && window.location.pathname!=='/Oll/index.html'){
+    fail('启动失败：只能从 /Oll/ 官方作品网站启动此游戏。');return;
+   }
+   try{
+    if(!window.crypto || !window.crypto.getRandomValues)throw new Error('secure random unavailable');
+    const random=new Uint8Array(32);
+    window.crypto.getRandomValues(random);
+    const token=Array.from(random,b=>b.toString(16).padStart(2,'0')).join('');
+    const record={v:2,token,created:Date.now(),target:normalized};
+    window.sessionStorage.setItem(target.key,JSON.stringify(record));
+    if(window.sessionStorage.getItem(target.key)!==JSON.stringify(record))
+     throw new Error('storage unavailable');
+    destination.hash=target.prefix+token;
+   }catch{
+    fail('启动失败：无法创建或保存一次性授权，请检查浏览器存储及安全连接。');return;
+   }
+  }else{
+   try{
+    window.sessionStorage.setItem('oll_game_launch_v1','authorized');
+    if(window.sessionStorage.getItem('oll_game_launch_v1')!=='authorized')
+     throw new Error('authorization was not stored');
+   }catch{
+    fail('启动失败：浏览器无法保存会话授权，请允许此网站使用 sessionStorage 后重试。');return;
+   }
   }
   try{window.location.assign(destination.href);}
   catch{fail('启动失败：浏览器未能打开游戏，请重试。');}
